@@ -19,17 +19,24 @@ byte mainPassByState = false, mainPassByTotal = 0;
 byte mainInValue = 1, mainIn_LastValue = 1; 
 byte mainOutValue = 1, mainOut_LastValue = 1;
 
+byte revSensTotal = 0, revSens_Report = 0; 
+byte revPassByState = false, revPassByTotal = 0;
+byte revInValue = 1, revIn_LastValue = 1; 
+byte revOutValue = 1, revOut_LastValue = 1;
+
 byte sensBusy = 0;
 
 //DEBUG SECTION
 const int mainPassByOff = 7;  // green wire main
 int mainPassByToZero = 1;
-//const int revPassByOff = 8;  // wht wire rev
-//int revPassByToZero = 1;
+const int revPassByOff = 8;  // wht wire rev
+int revPassByToZero = 1;
 //----END DEBUG---------------
 
 //---Function Declarations---------------
 int readMainSens();
+int readRevSens();
+//adding this now for the benefit of Linda my love
 
 
 
@@ -47,6 +54,7 @@ void setup() {
 
 //DEBUG Section - these are manual switches until functions are ready
   pinMode(mainPassByOff, INPUT_PULLUP);
+  pinMode(revPassByOff, INPUT_PULLUP);
   //pinMode(revPassByOff, INPUT_PULLUP);
   //----END DEBUG---------------
 
@@ -63,15 +71,23 @@ void loop() {
   //int revSenOutValue = debouncer4.read();
 
 sensBusy = readMainSens();
+int sensBusy2 = 0;
+sensBusy2 = readRevSens();
 
-mainPassByToZero = digitalRead(mainPassByOff);
+mainPassByToZero = digitalRead(mainPassByOff);  //debut
 
     if(mainPassByToZero == 0){
        mainPassByState = 0;
       }
-      
-      //Serial.print("mainOutValue: ");
-      //Serial.println(mainOutValue);
+
+revPassByToZero = digitalRead(revPassByOff);  //debug
+
+    if(revPassByToZero == 0){
+       revPassByState = 0;
+      }
+      /* debug
+      Serial.print("mainOutValue: ");
+      Serial.println(mainOutValue);
       Serial.print("sensBusy: ");
       Serial.println(sensBusy);
       //Serial.print("mainOutLastValue: ");
@@ -86,14 +102,37 @@ mainPassByToZero = digitalRead(mainPassByOff);
       Serial.print("mainPassByState: ");
       Serial.println(mainPassByState);
       Serial.println("-----end of the line--------");
+      delay(150);  */
+
+      Serial.print("revOutValue: ");
+      Serial.println(revOutValue);
+      Serial.print("sensBusy: ");
+      Serial.println(sensBusy);
+      //Serial.print("revOutLastValue: ");
+      //Serial.println(revOut_LastValue);
+      Serial.print("revSens_Report: ");
+      Serial.println(revSens_Report);
+      Serial.print("revSensTotal: ");
+      Serial.println(revSensTotal);
+      Serial.println("-----end of SENSORS--------");
+      Serial.print("revPassByTotal: ");
+      Serial.println(revPassByTotal);
+      Serial.print("revPassByState: ");
+      Serial.println(revPassByState);
+      Serial.println("-----end of the line--------");
       delay(150);
       
  
 }// end loop
+  /*---------------Updating Sensor Functions----------------------
+  All in this section update and track sensor information: Busy,
+  Direction, PassBy.  Only the mainOut sensor is documented.  The
+  remaining three work identically.
+  ------------------------------end of note---------------------*/
 
 int readMainSens() {
   
-  debouncer1.update();
+  debouncer1.update();  
   int mainInValue = debouncer1.read();
     
   if(mainInValue != mainIn_LastValue)     
@@ -109,26 +148,27 @@ int readMainSens() {
       }
       else mainSensTotal = 0;   
     }
-    // end readMainSenIn()
-
-    //void readMainSenOut() {
-  
-  debouncer2.update();
-  int mainOutValue = debouncer2.read();
     
-  if(mainOutValue != mainOut_LastValue)     
+  
+  debouncer2.update();  //read Out sensor
+  int mainOutValue = debouncer2.read();
+
+      //---update history registor:*Sens_Report    
+  if(mainOutValue != mainOut_LastValue)   
     {
       if(mainOutValue == 0) bitSet(mainSens_Report, 1);
       else bitClear(mainSens_Report, 1); 
 
       mainOut_LastValue = mainOutValue;
 
+      //---add running total to "*"SensTotal to track PassBy status
       if (mainSens_Report > 0) {
         mainSensTotal = mainSensTotal + mainSens_Report;
         mainPassByTotal = mainSensTotal;
       }
       else mainSensTotal = 0; 
     }
+      //---PassByTotal of "6" means train has moved by sensor successfully
     if(mainSensTotal == 0 && mainPassByTotal == 6) {
        mainPassByState = true;
        mainPassByTotal = 0;
@@ -138,6 +178,54 @@ int readMainSens() {
   
   return mainSensTotal;
 }  // end readMainSen--
+
+int readRevSens() {
+  
+  debouncer3.update();
+  int revInValue = debouncer3.read();
+    
+  if(revInValue != revIn_LastValue)     
+    {
+      if(revInValue == 0) bitSet(revSens_Report, 0);
+      else bitClear(revSens_Report, 0); 
+
+      revIn_LastValue = revInValue;
+
+      if (revSens_Report > 0) {
+        revSensTotal = revSensTotal + revSens_Report;
+        revPassByTotal = revSensTotal;
+      }
+      else revSensTotal = 0;   
+    }
+    // end readrevSenIn()
+
+    //void readrevSenOut() {
+  
+  debouncer4.update();
+  int revOutValue = debouncer4.read();
+    
+  if(revOutValue != revOut_LastValue)     
+    {
+      if(revOutValue == 0) bitSet(revSens_Report, 1);
+      else bitClear(revSens_Report, 1); 
+
+      revOut_LastValue = revOutValue;
+
+      if (revSens_Report > 0) {
+        revSensTotal = revSensTotal + revSens_Report;
+        revPassByTotal = revSensTotal;
+      }
+      else revSensTotal = 0; 
+    }
+    if(revSensTotal == 0 && revPassByTotal == 6) {
+       revPassByState = true;
+       revPassByTotal = 0;
+      }
+    else if(revSensTotal == 0) revPassByTotal = 0;
+      
+  
+  return revSensTotal;
+}  // end readrevSen--
   
   
   
