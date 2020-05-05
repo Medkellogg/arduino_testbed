@@ -7,6 +7,11 @@
 #define mainSensOutpin 12
 #define revSensInpin 10 
 #define revSensOutpin 9
+
+#define INBOUND 1    
+#define OUTBOUND 2
+#define CLEAR 0
+
 #define LED_PIN 13  //debug
 
 // Instantiate a Bounce object
@@ -18,13 +23,25 @@ byte mainSensTotal = 0, mainSens_Report = 0;
 byte mainPassByState = false, mainPassByTotal = 0;
 byte mainInValue = 1, mainIn_LastValue = 1; 
 byte mainOutValue = 1, mainOut_LastValue = 1;
+byte main_LastDirection = 0;
+byte mainLineDirection = 0;
+byte getMainDirection = 0;
+byte mainDirection = 0;
+bool mainOutbound = 0;
+bool mainInbound = 0;
 
 byte revSensTotal = 0, revSens_Report = 0; 
 byte revPassByState = false, revPassByTotal = 0;
 byte revInValue = 1, revIn_LastValue = 1; 
 byte revOutValue = 1, revOut_LastValue = 1;
+byte revLoopDirection = 0;
+byte rev_LastDirection = 0;
+byte getRevLoopDirection = 0;
+byte revDirection = 0;
+bool revOutbound = 0;
+bool revInbound = 0;
 
-byte sensBusy = 0;
+bool entry_ExitBusy = false;
 
 //DEBUG SECTION
 const int mainPassByOff = 7;  // green wire main
@@ -36,6 +53,9 @@ int revPassByToZero = 1;
 //---Function Declarations---------------
 int readMainSens();
 int readRevSens();
+byte rptMainDirection();
+byte rptRevDirection();
+bool readAllSens();
 //adding this now for the benefit of Linda my love
 
 
@@ -66,15 +86,11 @@ void setup() {
 
 void loop() {
   
+  entry_ExitBusy = readAllSens();
+  getMainDirection = rptMainDirection();
+  getRevLoopDirection = rptRevDirection();
   
-  //int revSenInValue = debouncer3.read();  
-  //int revSenOutValue = debouncer4.read();
-
-sensBusy = readMainSens();
-int sensBusy2 = 0;
-sensBusy2 = readRevSens();
-
-mainPassByToZero = digitalRead(mainPassByOff);  //debut
+mainPassByToZero = digitalRead(mainPassByOff);  //debug
 
     if(mainPassByToZero == 0){
        mainPassByState = 0;
@@ -85,53 +101,52 @@ revPassByToZero = digitalRead(revPassByOff);  //debug
     if(revPassByToZero == 0){
        revPassByState = 0;
       }
-      /* debug
-      Serial.print("mainOutValue: ");
-      Serial.println(mainOutValue);
-      Serial.print("sensBusy: ");
-      Serial.println(sensBusy);
-      //Serial.print("mainOutLastValue: ");
-      //Serial.println(mainOut_LastValue);
-      Serial.print("mainSens_Report: ");
-      Serial.println(mainSens_Report);
-      Serial.print("mainSensTotal: ");
-      Serial.println(mainSensTotal);
-      Serial.println("-----end of SENSORS--------");
-      Serial.print("mainPassByTotal: ");
-      Serial.println(mainPassByTotal);
-      Serial.print("mainPassByState: ");
-      Serial.println(mainPassByState);
-      Serial.println("-----end of the line--------");
-      delay(150);  */
+       //debug
 
-      Serial.print("revOutValue: ");
+      Serial.print("mainOutValue: ");
+      Serial.print(mainOutValue);
+      Serial.print("        revOutValue: ");
       Serial.println(revOutValue);
-      Serial.print("sensBusy: ");
-      Serial.println(sensBusy);
-      //Serial.print("revOutLastValue: ");
-      //Serial.println(revOut_LastValue);
-      Serial.print("revSens_Report: ");
+      Serial.print("mainSens_Report: ");
+      Serial.print(mainSens_Report);
+      Serial.print("     revSens_Report: ");
       Serial.println(revSens_Report);
-      Serial.print("revSensTotal: ");
+      Serial.print("mainSensTotal: ");
+      Serial.print(mainSensTotal);
+      Serial.print("       revSensTotal: ");
       Serial.println(revSensTotal);
-      Serial.println("-----end of SENSORS--------");
-      Serial.print("revPassByTotal: ");
+      Serial.print("mainPassByTotal: ");
+      Serial.print(mainPassByTotal);
+      Serial.print("     revPassByTotal: ");
       Serial.println(revPassByTotal);
-      Serial.print("revPassByState: ");
+      Serial.print("mainPassByState: ");
+      Serial.print(mainPassByState);
+      Serial.print("     revPassByState: ");
       Serial.println(revPassByState);
-      Serial.println("-----end of the line--------");
-      delay(150);
-      
+      Serial.print("entryExitBusy: ");
+      Serial.println(entry_ExitBusy);
+      Serial.print("mainLineDirection: ");
+      Serial.print(getMainDirection);
+      Serial.print("   revLoopDirection: ");
+      Serial.println(getRevLoopDirection);
+      Serial.print("main_LastDirection: ");
+      Serial.print(main_LastDirection);
+      Serial.print("   rev_lastDirection: ");
+      Serial.println(rev_LastDirection);
+      Serial.println();
+      Serial.println("=======Report Starts Here!=======");
+      delay(307); 
+
  
-}// end loop
+}// end void loop
+
   /*---------------Updating Sensor Functions----------------------
   All in this section update and track sensor information: Busy,
   Direction, PassBy.  Only the mainOut sensor is documented.  The
   remaining three work identically.
   ------------------------------end of note---------------------*/
 
-int readMainSens() {
-  
+int readMainSens() {  
   debouncer1.update();  
   int mainInValue = debouncer1.read();
     
@@ -153,7 +168,7 @@ int readMainSens() {
   debouncer2.update();  //read Out sensor
   int mainOutValue = debouncer2.read();
 
-      //---update history registor:*Sens_Report    
+      //---update history register:*Sens_Report    
   if(mainOutValue != mainOut_LastValue)   
     {
       if(mainOutValue == 0) bitSet(mainSens_Report, 1);
@@ -168,7 +183,9 @@ int readMainSens() {
       }
       else mainSensTotal = 0; 
     }
-      //---PassByTotal of "6" means train has moved by sensor successfully
+      /*---PassByTotal of "6" means train has cleared the sensor success-
+           fully.  Only done once at the end of each "read"*"Sens()".---*/
+
     if(mainSensTotal == 0 && mainPassByTotal == 6) {
        mainPassByState = true;
        mainPassByTotal = 0;
@@ -179,8 +196,7 @@ int readMainSens() {
   return mainSensTotal;
 }  // end readMainSen--
 
-int readRevSens() {
-  
+int readRevSens() {  
   debouncer3.update();
   int revInValue = debouncer3.read();
     
@@ -197,10 +213,7 @@ int readRevSens() {
       }
       else revSensTotal = 0;   
     }
-    // end readrevSenIn()
-
-    //void readrevSenOut() {
-  
+      
   debouncer4.update();
   int revOutValue = debouncer4.read();
     
@@ -222,12 +235,91 @@ int readRevSens() {
        revPassByTotal = 0;
       }
     else if(revSensTotal == 0) revPassByTotal = 0;
-      
-  
   return revSensTotal;
 }  // end readrevSen--
+
   
-  
-  
+bool readAllSens() {
+  bool sensBusy;
+  int sensMainBusy = 0;
+  int sensRevBusy = 0;
+
+  sensMainBusy = readMainSens();
+  sensRevBusy = readRevSens();
+
+  if(sensMainBusy > 0 || sensRevBusy >0){
+    sensBusy = true;
+  }
+  else sensBusy = false;
+  return sensBusy;
+}
+
+
+//--------------------------------------------------
+
+byte rptMainDirection() 
+  {      
+    if((mainSensTotal == 2) && (mainSens_Report = 2)) {
+      mainOutbound = 1;
+      mainInbound = 0;
+      }
+    else if((mainSensTotal == 1) && (mainSens_Report = 1)) {
+      mainOutbound = 0;
+      mainInbound = 1;
+      }
+    if((mainDirection == 0) && (mainSensTotal == 0)) {
+      mainOutbound = 0;
+      mainInbound = 0;
+    } 
+    
+    if(mainOutbound == 1){
+      mainLineDirection = 2;
+      main_LastDirection = 2;
+    }
+    if(mainInbound == 1){
+      mainLineDirection = 1;
+      main_LastDirection = 1;
+    }
+    if((mainOutbound == 0) && (mainInbound == 0)){
+     mainLineDirection = 0;
+    }
+
+    return mainLineDirection;
+  }  //End function
+
+/*-----------------FUNCTION rptRevDirection()--------------------------
+    This function is the same as above, but reports on the Reverse Loop.
+ --------------------------------------------------------------------*/
+
+  byte rptRevDirection() 
+  {
+    if((revSensTotal == 2) && (revSens_Report = 2)) {
+      revOutbound = 1;
+      revInbound = 0;
+      }
+    else if((revSensTotal == 1) && (revSens_Report = 1)) {
+      revOutbound = 0;
+      revInbound = 1;
+      }
+    if((revDirection == 0) && (revSensTotal == 0)) {
+      revOutbound = 0;
+      revInbound = 0;
+      }
+    
+    if(revOutbound == 1){
+      revLoopDirection = 2;
+      rev_LastDirection = 2;
+    }
+    if(revInbound == 1){
+      revLoopDirection = 1;
+      rev_LastDirection = 1;
+    }
+    if((revOutbound == 0) && (revInbound == 0)){
+     revLoopDirection = 0;
+    }
+
+    return revLoopDirection;
+  }  //End function   
+
   
   
